@@ -5,7 +5,7 @@ from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
 from forms import UserAddForm, LoginForm, MessageForm, EditForm
-from models import db, connect_db, User, Message, Follows
+from models import db, connect_db, User, Message, Follows, Likes
 
 CURR_USER_KEY = "curr_user"
 
@@ -251,6 +251,34 @@ def delete_user():
     return redirect("/signup")
 
 
+@app.route('/users/<int:user_id>/add_like/<int:msg_id>', methods=["POST"])
+def add_or_remove_like(user_id, msg_id):
+    """Add a like to a warble or remove a like from warble"""
+
+    if not g.user or user_id != g.user.id:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    poss_like = Likes.query.filter((Likes.user_id == user_id) & (Likes.message_id == msg_id)).first()
+
+    if poss_like:
+        db.session.delete(poss_like)
+        db.session.commit()
+        return redirect('/')
+    else:
+        like = Likes()
+        like.user_id = user_id
+        like.message_id = msg_id
+
+        db.session.add(like)
+        db.session.commit()
+
+        return redirect("/")
+
+    
+
+
+
 ##############################################################################
 # Messages routes:
 
@@ -328,7 +356,10 @@ def homepage():
             .all()
         )
 
-        return render_template('home.html', messages=messages)
+        likes = (Likes.query.filter((Likes.message_id.in_([msg.id for msg in messages])) & (Likes.user_id==g.user.id)).all())
+        print(likes)
+
+        return render_template('home.html', messages=messages, likes=[like.message_id for like in likes])
 
     else:
         return render_template('home-anon.html')
